@@ -1,0 +1,191 @@
+---
+title: "Midterm 1"
+author: Anna Tigranyan
+date: "2022-11-01"
+output: html_document
+---
+
+```{r message=FALSE, warning=FALSE, paged.print=FALSE}
+library(quantmod)
+library(tidyverse)
+library(lubridate)
+library(ggfortify)
+library(forecast)
+
+```
+## Loading the data
+```{r message=FALSE, warning=FALSE, paged.print=FALSE}
+
+getSymbols("BCS",from="2021-10-30", to="2022-10-30")
+
+
+```
+
+```{r}
+head(BCS)
+
+```
+<br>
+
+##1. Display the graph of the time series
+
+```{r message=FALSE, warning=FALSE, paged.print=FALSE}
+chartSeries(BCS)
+
+```
+
+
+```{r message=FALSE, warning=FALSE, paged.print=FALSE}
+autoplot(BCS[,6]) +
+  ggtitle("BCS") +
+  xlab("Time") +
+  ylab(" ")
+```
+
+```{r message=FALSE, warning=FALSE, paged.print=FALSE}
+ggplot()+ geom_line(data = BCS, aes(x=Index, y=(BCS[,6])),size=1)+
+  ylab(" ") + xlab("TIME")
+```
+```{r message=FALSE, warning=FALSE, paged.print=FALSE}
+autoplot(decompose(ts(diff(BCS[,6]), frequency = 5)))
+```
+
+<br>
+
+## 2. Display Exponential Smoothing graph with aplha = 0.3:
+
+<br>
+The Simple Exponential Smoothing technique is used for data that has no trend or seasonal pattern. The SES is the simplest among all the exponential smoothing techniques. We know that in any type of exponential smoothing we weigh the recent values or observations more heavily rather than the old values or observations. The weight of each and every parameter is always determined by a smoothing parameter or alpha. The value of alpha lies between 0 and 1(0.3 in our case). 
+
+```{r message=FALSE, warning=FALSE, paged.print=FALSE}
+sm <- ses(BCS[,6],alpha = 0.3)
+autoplot(sm)
+
+```
+
+<br>
+From the above output graph, we can notice that a flat lined estimate is projected towards the future by our forecast model. Hence we can say that from the data it is not capturing the present trend.To correct this, we can use the diff() function to remove the trend from the data.
+```{r message=FALSE, warning=FALSE, paged.print=FALSE}
+
+sm <- ses(diff(BCS[,6]),alpha = 0.3)
+autoplot(sm)
+```
+<br>
+
+
+## 3. Generate the series of the rate of return r ,display the graphs of r
+<br>
+Let's generate rate:
+```{r message=FALSE, warning=FALSE, paged.print=FALSE}
+set.seed(123)
+r <- data.frame(
+      day = as.Date("2022-01-11")-0:364,rate = runif(365)*3/11)
+
+head(r)
+
+```
+<br>
+
+
+## 4. Check whether or not r is stationary using augmented Dickey Fuller test. 
+<br>
+ADF Test <br>
+**H0:** The time series is non-stationary.<br>
+To put it another way, it has some time-dependent structure and does not exhibit constant variance over time.
+<br>
+**HA:** The time series is stationary.
+<br>
+We can reject the null hypothesis and infer that the time series is stationary if the p-value from the test is less than some significance level (e.g. =0.05).<br>
+Let's apply adf test for our rate:
+```{r message=FALSE, warning=FALSE, paged.print=FALSE}
+library(tseries)
+
+#performing augmented Dickey-Fuller test 
+adf.test(r$rate)
+
+
+```
+
+As p-value **0.01** is less than 0.05 we can reject null hypothesis(The time series is non-stationary)
+So we can sey that **the time series is stationary.**<br>
+<br>
+
+## 5.Estimate the autocorrelation function and the partial correlation function till a lag of 20.Give a description and an interpretation.<br>
+
+ACF plot is a bar chart of coefficients of correlation between a time series and it lagged values.
+Simply stated: ACF explains how the present value of a given time series is correlated with the past (1-unit past, 2-unit past, …, n-unit past) values.
+```{r message=FALSE, warning=FALSE}
+acf(r$rate,lag=20,main = 'Autocorrelation function of rate')
+```
+<br>
+PACF is the partial autocorrelation function that explains the partial correlation between the series and lags itself. In simple terms, PACF can be explained using a linear regression where we predict y(t) from y(t-1), y(t-2), and y(t-3) [2]. In PACF, we correlate the “parts” of y(t) and y(t-3) that are not predicted by y(t-1) and y(t-2).
+```{r message=FALSE, warning=FALSE}
+pacf(r$rate,lag=20,main = 'Autocorrelation function of rate')
+```
+<br>
+We can make the following observation:<br>
+
+There’s only one autocorrelation that is significantly non-zero at a lag of 0 .We have a white nois process.
+<br>
+
+## 6 Estimate the best ARIMA model for r, comment the results
+
+<br>
+The best model:
+```{r message=FALSE, warning=FALSE, paged.print=FALSE}
+model <- auto.arima(r$rate)  
+model
+```
+From above we can see that the best model is ARIMA(0,0,0).We have a white noise process.
+<br>
+
+## 7. Check is there any pattern in residuals of the best model using Box-Liung test
+
+```{r message=FALSE, warning=FALSE}
+checkresiduals(model)
+```
+
+```{r message=FALSE, warning=FALSE, paged.print=FALSE}
+
+Box.test(r$rate, lag = 1, type = "Ljung")
+```
+
+Here we see a p-value much higher than .01, thus we can not reject the null hypothesis, indicating the time series doesn't contain an autocorrelation.
+<br>
+
+## 8. Forecast the r for the next 10 days based on the best model using table and graph
+
+```{r message=FALSE, warning=FALSE, paged.print=FALSE}
+#Using predict() to make a 1-step forecast
+predict_AR <- predict(model)
+
+#Obtaining the 1-step forecast using $pred[1]
+predict_AR$pred[1]
+```
+```{r message=FALSE, warning=FALSE, paged.print=FALSE}
+#ALternatively Using predict to make 1-step through 10-step forecasts
+predict(model, n.ahead = 10)
+```
+
+
+```{r message=FALSE, warning=FALSE, paged.print=FALSE}
+# Next 10 forecasted values  
+
+forecast_data <- forecast(model, 10) 
+
+
+print(forecast_data)
+
+
+plot(forecast_data, main = "forecasting_data for rate") 
+```
+
+
+
+
+
+
+
+
+
+
